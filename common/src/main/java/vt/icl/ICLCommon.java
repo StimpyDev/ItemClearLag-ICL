@@ -7,10 +7,9 @@ import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.protocol.game.ClientboundSoundPacket;
-import net.minecraft.resources.Identifier; // Gebruik Identifier ipv ResourceLocation
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.Permissions;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
@@ -23,6 +22,7 @@ import vt.icl.config.Configuration;
 import vt.icl.config.lang.IclTranslationManager;
 import vt.icl.mixin.ItemEntityAccessor;
 import vt.icl.permission.PermissionHandler;
+import vt.icl.permission.Permissions;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -63,7 +63,6 @@ public class ICLCommon {
     public static void onServerStop() {
         ticksUntilNextClean = -1;
     }
-
     public static void CancelIcl(int tempDelay) {
         if (tempDelay > 0) {
             ticksUntilNextClean = (long) tempDelay * 20;
@@ -74,7 +73,7 @@ public class ICLCommon {
 
     public static void resetSchedule() {
         if (config.Delay > 0) {
-            ticksUntilNextClean = config.Delay * 20L;
+            ticksUntilNextClean = (long) config.Delay * 20;
         } else {
             ticksUntilNextClean = -1;
         }
@@ -158,13 +157,13 @@ public class ICLCommon {
     }
 
     public static void IclPlaysound(ServerPlayer player, boolean isLastSound) {
-        Identifier sound = Identifier.parse(isLastSound ? config.LastNotificationSound : config.NotificationSound);
+        ResourceLocation sound = ResourceLocation.parse(isLastSound ? config.LastNotificationSound : config.NotificationSound);
         Holder<SoundEvent> registryEntry = Holder.direct(SoundEvent.createVariableRangeEvent(sound));
         player.connection.send(new ClientboundSoundPacket(registryEntry, SoundSource.PLAYERS, player.getX(), player.getY(), player.getZ(), 1.0f, 1.0f, 0L), null);
     }
 
     private static boolean permissionCheckforCancel(CommandSourceStack source) {
         if (permissionHandler != null) return permissionHandler.hasPermission(source, MOD_ID + ".cancel");
-        return !config.RequireOpCancel || source.hasPermission(4);
+        return !config.RequireOpCancel || source.hasPermission(Permissions.COMMANDS_GAMEMASTER);
     }
 }
