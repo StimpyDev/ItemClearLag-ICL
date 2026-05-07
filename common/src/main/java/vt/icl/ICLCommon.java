@@ -7,7 +7,7 @@ import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.protocol.game.ClientboundSoundPacket;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier; // Gebruik Identifier ipv ResourceLocation
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
@@ -32,6 +32,7 @@ import static vt.icl.config.lang.IclTranslationManager.createDefaultTranslationF
 
 public class ICLCommon {
     public static final String MOD_ID = "icl";
+    public static final String MOD_PREFIX = ""; 
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID.toUpperCase());
     public static final Path CONFIG_DIR = new File("./config/" + MOD_ID.substring(0, 1).toUpperCase() + MOD_ID.substring(1)).toPath();
     
@@ -57,7 +58,18 @@ public class ICLCommon {
     public static void onServerStart(MinecraftServer server) {
         ICLCommon.server = server;
         resetSchedule();
-        LOGGER.info("ICL initialized on server start");
+    }
+
+    public static void onServerStop() {
+        ticksUntilNextClean = -1;
+    }
+
+    public static void CancelIcl(int tempDelay) {
+        if (tempDelay > 0) {
+            ticksUntilNextClean = (long) tempDelay * 20;
+        } else {
+            resetSchedule();
+        }
     }
 
     public static void resetSchedule() {
@@ -65,7 +77,6 @@ public class ICLCommon {
             ticksUntilNextClean = config.Delay * 20L;
         } else {
             ticksUntilNextClean = -1;
-            LOGGER.info("ICL disabled: delay is 0 or less");
         }
     }
 
@@ -73,13 +84,10 @@ public class ICLCommon {
         if (ticksUntilNextClean <= 0) return;
 
         ticksUntilNextClean--;
-
         long secondsLeft = ticksUntilNextClean / 20;
-        long currentTickInSecond = ticksUntilNextClean % 20;
 
-        if (currentTickInSecond == 0) {
+        if (ticksUntilNextClean % 20 == 0) {
             handleNotifications(server, secondsLeft);
-            
             if (secondsLeft <= 0) {
                 clearItems(server);
                 resetSchedule();
@@ -88,7 +96,6 @@ public class ICLCommon {
     }
 
     private static void handleNotifications(MinecraftServer server, long secondsLeft) {
-        // Reguliere notificaties
         if (config.doShowNotification) {
             for (int i = 0; i < config.NotificationTimes; i++) {
                 long notifyAt = config.NotificationStart - (long) i * config.NotificationDelay;
@@ -97,7 +104,6 @@ public class ICLCommon {
                 }
             }
         }
-
         if (config.doNotificationCountdown && secondsLeft <= config.CountdownStart && secondsLeft > 0) {
             broadcastIclMessage(server, "text.icl.countdown", false, secondsLeft);
         }
@@ -107,12 +113,8 @@ public class ICLCommon {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             MutableComponent message = Component.literal(IclTranslate(translationKey, args))
                     .withStyle(ChatFormatting.valueOf(config.NotificationColor));
-            
             IclMessage(player, message);
-            
-            if (playSound && config.doNotificationSound) {
-                IclPlaysound(player, false);
-            }
+            if (playSound && config.doNotificationSound) IclPlaysound(player, false);
         }
     }
 
@@ -131,51 +133,38 @@ public class ICLCommon {
             for (var entity : world.getEntities(EntityTypeTest.forClass(ItemEntity.class), Entity::isAlive)) {
                 if (config.preserveNoPickupItems && ((ItemEntityAccessor) entity).getPickupDelay() == Short.MAX_VALUE) continue;
                 if (config.preserveNoDespawnItems && entity.getAge() == Short.MIN_VALUE) continue;
-                
                 count += entity.getItem().getCount();
                 entity.discard();
             }
         }
-
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (config.doShowNotification) {
-                player.sendSystemMessage(Component.literal(IclTranslate("text.icl.clear.finish", count))
-                        .withStyle(ChatFormatting.valueOf(config.NotificationColor)));
+                player.sendSystemMessage(Component.literal(IclTranslate("text.icl.clear.finish", count)).withStyle(ChatFormatting.valueOf(config.NotificationColor)));
                 if (config.doLastNotificationSound) IclPlaysound(player, true);
             }
         }
-        LOGGER.info("Items cleared: {}", count);
     }
 
     public static void reloadIcl() {
         config = ConfigManager.getConfig();
         reloadTranslations();
         resetSchedule();
-        LOGGER.info("ICL Config reloaded");
     }
 
     public static String IclTranslate(String key, Object... args) {
         String translation = (translations != null) ? translations.get(key) : null;
         if (translation == null && defaultTranslations != null) translation = defaultTranslations.get(key);
-        
-        if (translation != null) {
-            return args.length > 0 ? String.format(translation, args) : translation;
-        }
-        return key;
+        return (translation != null) ? (args.length > 0 ? String.format(translation, args) : translation) : key;
     }
 
     public static void IclPlaysound(ServerPlayer player, boolean isLastSound) {
-        ResourceLocation sound = ResourceLocation.parse(isLastSound ? config.LastNotificationSound : config.NotificationSound);
+        Identifier sound = Identifier.parse(isLastSound ? config.LastNotificationSound : config.NotificationSound);
         Holder<SoundEvent> registryEntry = Holder.direct(SoundEvent.createVariableRangeEvent(sound));
-        
-        player.connection.send(new ClientboundSoundPacket(registryEntry,
-                SoundSource.PLAYERS, player.getX(), player.getY(), player.getZ(), 1.0f, 1.0f, server.overworld().getRandom().nextLong()), null);
+        player.connection.send(new ClientboundSoundPacket(registryEntry, SoundSource.PLAYERS, player.getX(), player.getY(), player.getZ(), 1.0f, 1.0f, 0L), null);
     }
 
     private static boolean permissionCheckforCancel(CommandSourceStack source) {
-        if (permissionHandler != null) {
-            return permissionHandler.hasPermission(source, MOD_ID + ".cancel");
-        }
-        return !config.RequireOpCancel || source.hasPermission(Permissions.COMMANDS_GAMEMASTER);
+        if (permissionHandler != null) return permissionHandler.hasPermission(source, MOD_ID + ".cancel");
+        return !config.RequireOpCancel || source.hasPermission(4);
     }
 }
