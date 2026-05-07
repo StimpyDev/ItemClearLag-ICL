@@ -22,7 +22,6 @@ import vt.icl.config.Configuration;
 import vt.icl.config.lang.IclTranslationManager;
 import vt.icl.mixin.ItemEntityAccessor;
 import vt.icl.permission.PermissionHandler;
-import vt.icl.permission.Permissions;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -63,6 +62,7 @@ public class ICLCommon {
     public static void onServerStop() {
         ticksUntilNextClean = -1;
     }
+
     public static void CancelIcl(int tempDelay) {
         if (tempDelay > 0) {
             ticksUntilNextClean = (long) tempDelay * 20;
@@ -77,8 +77,7 @@ public class ICLCommon {
         } else {
             ticksUntilNextClean = -1;
         }
-    }
-
+    }\
     public static void onTick(MinecraftServer server) {
         if (ticksUntilNextClean <= 0) return;
 
@@ -157,13 +156,13 @@ public class ICLCommon {
     }
 
     public static void IclPlaysound(ServerPlayer player, boolean isLastSound) {
-        ResourceLocation sound = ResourceLocation.parse(isLastSound ? config.LastNotificationSound : config.NotificationSound);
+        net.minecraft.resources.ResourceLocation sound = net.minecraft.resources.ResourceLocation.parse(isLastSound ? config.LastNotificationSound : config.NotificationSound);
         Holder<SoundEvent> registryEntry = Holder.direct(SoundEvent.createVariableRangeEvent(sound));
         player.connection.send(new ClientboundSoundPacket(registryEntry, SoundSource.PLAYERS, player.getX(), player.getY(), player.getZ(), 1.0f, 1.0f, 0L), null);
     }
 
     private static boolean permissionCheckforCancel(CommandSourceStack source) {
         if (permissionHandler != null) return permissionHandler.hasPermission(source, MOD_ID + ".cancel");
-        return !config.RequireOpCancel || source.hasPermission(Permissions.COMMANDS_GAMEMASTER);
+        return !config.RequireOpCancel || source.hasPermission(4); 
     }
 }
